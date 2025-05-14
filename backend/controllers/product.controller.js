@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 export const getPhotos = async (req, res) => {
     try {
-        const products = await Photo.find({});
+        const products = await Photo.find({}).sort({createdAt: 1}).limit(1).skip(1);
         res.status(200).json({success: true, data: products});
     } catch (err) {
         console.error("Error on getting products", err.message);
@@ -48,11 +48,16 @@ export const updatePhoto = async(req, res) => {
 
 export const deletePhoto = async(req, res) => {
     const {photoId} = req.params;
+
+    if(!mongoose.Types.ObjectId.isValid(photo_id)){
+        return res.status(404).json({success: false, message: 'Invalid product ID'});
+    }
+
     try {
         await Photo.findByIdAndDelete(photoId);
         res.status(200).json({success: true, message: 'Photo deleted'});
     } catch(err) {
         console.log("Error in deleting new photo", err.message);
-        res.status(404).json({success: false, message: 'Photo not found'});
+        res.status(500).json({success: false, message: 'Server Error'});
     }
 }
