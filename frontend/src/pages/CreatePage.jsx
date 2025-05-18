@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import {useState, useRef, useCallback, useEffect} from "react";
 import {
     Box,
     Button,
@@ -19,18 +19,97 @@ import {
     WrapItem,
     CloseButton,
     Tooltip,
-    Heading
+    Heading, useToast, UnorderedList, ListItem, Flex
 } from "@chakra-ui/react";
-import { AddIcon, DeleteIcon } from "@chakra-ui/icons";
+import {AddIcon, DeleteIcon, EditIcon} from "@chakra-ui/icons";
+import {usePhotoStore} from "../store/photo.js";
 
 const CreatePage = () => {
     const [files, setFiles] = useState([]);
+    const [duplicates, setDuplicates] = useState([]);
     const [tags, setTags] = useState([]);
     const [newTag, setNewTag] = useState("");
     const [isAddingTag, setIsAddingTag] = useState(false);
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragCounter = useRef(0);
+
+    const toast = useToast()
+
+    const {createPhoto, checkForDuplicates} = usePhotoStore()
+
+    const verifyDuplicates = async () => {
+        if (files.length === 0) return;
+
+        const filenames = files.map(f => f.name);
+        const { success, duplicates: dup } = await checkForDuplicates(filenames);
+
+        if (success) {
+            setDuplicates(dup || []);
+            if (dup.length > 0) {
+                toast({
+                    title: "Warning",
+                    description: `${dup.length} photos have the same name`,
+                    status: "warning",
+                    duration: 5000,
+                    isClosable: true
+                });
+            }
+        }
+    };
+
+    useEffect(() => {
+        verifyDuplicates();
+    }, [files]);
+
+    const handleSubmit = async(e) => {
+        e.preventDefault();
+
+        if (files.length === 0) {
+            toast({
+                title: "Info",
+                description: "Add some photos",
+                status: "info",
+                isClosable: true
+            });
+            return;
+        }
+
+        if (duplicates.length > 0) {
+            toast({
+                title: "Cant send photos",
+                description: "Please remove or rename duplicated photos",
+                status: "error",
+                isClosable: true
+            });
+            return;
+        }
+
+        const photosData = files.map(file => ({
+            filename: file.name,
+            tags: [...tags],
+        }));
+
+        const {success, message} = await createPhoto(photosData);
+        if(!success){
+            toast({
+                title: "Error",
+                description: message,
+                status: "error",
+                isClosable: true
+            })
+        } else {
+            toast({
+                title: "Success",
+                description: message,
+                status: "success",
+                isClosable: true
+            })
+            setFiles([])
+            setTags([]);
+            setDuplicates([]);
+        }
+    };
 
     const handleFilesChange = useCallback((e) => {
         const selectedFiles = Array.from(e.target.files || []);
@@ -132,6 +211,11 @@ const CreatePage = () => {
             <HStack justify="space-between" mb={4}>
                 <Text fontSize="md" fontWeight="medium">
                     Wybrane zdjęcia: {files.length}
+                    {duplicates.length > 0 && (
+                        <Text as="span" color="red.500" ml={2}>
+                            ({duplicates.length} duplikatów)
+                        </Text>
+                    )}
                 </Text>
                 {files.length > 0 && (
                     <Button
@@ -145,6 +229,19 @@ const CreatePage = () => {
                     </Button>
                 )}
             </HStack>
+            {duplicates.length > 0 && (
+                <Box bg="red.50" p={3} borderRadius="md" mb={4} border="1px solid" borderColor="red.100">
+                    <Text color="red.600" fontWeight="medium" mb={2}>
+                        Uwaga: Następujące pliki już istnieją w bazie:
+                    </Text>
+                    <UnorderedList color="red.600" fontSize="sm">
+                        {duplicates.map((dup, index) => (
+                            <ListItem key={index}>{dup}</ListItem>
+                        ))}
+                    </UnorderedList>
+                </Box>
+            )}
+
 
             <Wrap spacing={4}>
                 {files.map((file, idx) => (
@@ -155,6 +252,8 @@ const CreatePage = () => {
                             borderRadius="md"
                             overflow="hidden"
                             boxShadow="md"
+                            border="3px solid"
+                            borderColor={duplicates.includes(file.name) ? "red.500" : "transparent"}
                         >
                             <Image
                                 src={URL.createObjectURL(file)}
@@ -165,7 +264,6 @@ const CreatePage = () => {
                             />
                             <Box
                                 p={2}
-                                bg={useColorModeValue("whiteAlpha.800", "blackAlpha.800")}
                                 position="absolute"
                                 bottom={0}
                                 left={0}
@@ -183,20 +281,43 @@ const CreatePage = () => {
                                     </Text>
                                 </Tooltip>
                             </Box>
-                            <CloseButton
-                                size="sm"
+                            <Flex
                                 position="absolute"
                                 top={1}
+                                left={1}
                                 right={1}
-                                bg="white"
-                                borderRadius="full"
-                                color="gray.800"
-                                _hover={{ bg: "gray.100" }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveFile(idx);
-                                }}
-                            />
+                                zIndex={2}
+                                justifyContent="space-between"
+                            >
+                                <Button
+                                    size="xs"
+                                    bg="white"
+                                    opacity={0.5}
+                                    borderRadius="full"
+                                    color="gray.800"
+                                    _hover={{ bg: "white" , opacity: 1}}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        //TODO dodać obslugę edycji zdjęcia
+                                        //handleEditFile(idx);e
+                                    }}
+                                >
+                                    <EditIcon />
+                                </Button>
+                                <CloseButton
+                                    size="sm"
+                                    bg="white"
+                                    opacity={0.5}
+                                    borderRadius="full"
+                                    color="gray.800"
+                                    _hover={{ bg: "white" , opacity: 1}}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveFile(idx);
+                                    }}
+                                />
+                            </Flex>
+
                         </Box>
                     </WrapItem>
                 ))}
@@ -226,7 +347,7 @@ const CreatePage = () => {
                 </Heading>
                 <VStack spacing={6} align="stretch">
                     <FormControl>
-                        <FormLabel fontSize="lg" fontWeight="bold">Zdjęcia</FormLabel>
+                        <FormLabel fontSize="lg" fontWeight="bold">Photos</FormLabel>
                         <Box
                             onClick={() => fileInputRef.current.click()}
                             onDragEnter={handleDragEnter}
@@ -237,10 +358,10 @@ const CreatePage = () => {
                         >
                             <VStack spacing={2} zIndex={2}>
                                 <Text fontSize="lg" fontWeight="medium">
-                                    {isDragging ? "Upuść zdjęcia tutaj" : "Przeciągnij lub kliknij, aby dodać zdjęcia"}
+                                    {isDragging ? "Drop here" : "Drag or click to add a photo"}
                                 </Text>
                                 <Text fontSize="sm" color="gray.500">
-                                    Dodaj zdjęcia w formacie JPG, PNG
+                                    Add photos in JPG or PNG format.
                                 </Text>
                             </VStack>
                         </Box>
@@ -257,7 +378,7 @@ const CreatePage = () => {
                     {files.length > 0 && renderFilePreviews()}
 
                     <FormControl>
-                        <FormLabel fontSize="lg" fontWeight="bold">Tagi</FormLabel>
+                        <FormLabel fontSize="lg" fontWeight="bold">Tags</FormLabel>
                         <Stack spacing={3}>
                             <HStack spacing={2} flexWrap="wrap">
                                 {tags.map((tag, index) => (
@@ -285,7 +406,7 @@ const CreatePage = () => {
                                         size="sm"
                                         colorScheme="blue"
                                     >
-                                        Dodaj
+                                        Add
                                     </Button>
                                 )}
                             </HStack>
@@ -297,8 +418,9 @@ const CreatePage = () => {
                         colorScheme="blue"
                         size="lg"
                         mt={4}
+                        onClick={handleSubmit}
                     >
-                        Wyślij zdjęcia
+                        Send photos
                     </Button>
                 </VStack>
             </Box>

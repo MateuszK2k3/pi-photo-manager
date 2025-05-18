@@ -35,7 +35,7 @@ const Navbar = () => {
                             <PlusSquareIcon fontSize={20}/>
                         </Button>
                     </Link>
-                    <Button onClick={toggleColorMode}>
+                    <Button onClick={toggleColorMode} >
                         {colorMode === "light" ? <IoMoon/> :
                         <LuSun size={20}/>}
                     </Button>
