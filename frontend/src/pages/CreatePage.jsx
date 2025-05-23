@@ -23,6 +23,7 @@ import {
 } from "@chakra-ui/react";
 import {AddIcon, DeleteIcon, EditIcon} from "@chakra-ui/icons";
 import {usePhotoStore} from "../store/photo.js";
+import PhotoEditWindow from "../components/PhotoEditWindow.jsx";
 
 const CreatePage = () => {
     const [files, setFiles] = useState([]);
@@ -33,10 +34,12 @@ const CreatePage = () => {
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragCounter = useRef(0);
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     const toast = useToast()
 
-    const {createPhoto, checkForDuplicates} = usePhotoStore()
+    const {checkForDuplicates} = usePhotoStore()
 
     const verifyDuplicates = async () => {
         if (files.length === 0) return;
@@ -62,7 +65,7 @@ const CreatePage = () => {
         verifyDuplicates();
     }, [files]);
 
-    const handleSubmit = async(e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (files.length === 0) {
@@ -77,7 +80,7 @@ const CreatePage = () => {
 
         if (duplicates.length > 0) {
             toast({
-                title: "Cant send photos",
+                title: "Can't send photos",
                 description: "Please remove or rename duplicated photos",
                 status: "error",
                 isClosable: true
@@ -85,30 +88,66 @@ const CreatePage = () => {
             return;
         }
 
-        const photosData = files.map(file => ({
-            filename: file.name,
-            tags: [...tags],
-        }));
+        try {
+            const formData = new FormData();
 
-        const {success, message} = await createPhoto(photosData);
-        if(!success){
-            toast({
-                title: "Error",
-                description: message,
-                status: "error",
-                isClosable: true
-            })
-        } else {
+            // Prześlij oryginalne nazwy plików jako dodatkowe pole
+            const originalNames = files.map(file => file.name);
+            formData.append('originalNames', JSON.stringify(originalNames));
+
+            // Dodaj pliki
+            files.forEach(file => {
+                formData.append('photos', file, file.name); // Trzeci parametr zachowuje nazwę
+            });
+
+            // Dodaj tagi
+            if (tags.length > 0) {
+                formData.append('tags', JSON.stringify(tags));
+            }
+
+            const response = await fetch('/api/photos', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Upload failed');
+            }
+
             toast({
                 title: "Success",
-                description: message,
+                description: "Photos uploaded successfully",
                 status: "success",
                 isClosable: true
-            })
-            setFiles([])
+            });
+
+            setFiles([]);
             setTags([]);
             setDuplicates([]);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast({
+                title: "Error",
+                description: error.message,
+                status: "error",
+                isClosable: true
+            });
         }
+    };
+
+    const handleEditFile = (index) => {
+        setEditingIndex(index);
+        setIsEditModalOpen(true);
+    };
+
+    const handleSaveEdit = (updatedData) => {
+        setFiles(files.map((file, i) =>
+            i === editingIndex ? new File([file], updatedData.name, { type: file.type }) : file
+        ));
+        setTags(updatedData.tags);
+        setIsEditModalOpen(false);
     };
 
     const handleFilesChange = useCallback((e) => {
@@ -255,6 +294,24 @@ const CreatePage = () => {
                             border="3px solid"
                             borderColor={duplicates.includes(file.name) ? "red.500" : "transparent"}
                         >
+                            {duplicates.includes(file.name) && (
+                                <Box
+                                    position="absolute"
+                                    top="0"
+                                    left="0"
+                                    right="0"
+                                    bg="red.500"
+                                    color="white"
+                                    textAlign="center"
+                                    fontSize="xs"
+                                    fontWeight="bold"
+                                    zIndex="1"
+                                    py="1px"
+                                >
+                                    DUPLICATE
+                                </Box>
+                            )}
+
                             <Image
                                 src={URL.createObjectURL(file)}
                                 alt={`preview ${idx}`}
@@ -295,11 +352,10 @@ const CreatePage = () => {
                                     opacity={0.5}
                                     borderRadius="full"
                                     color="gray.800"
-                                    _hover={{ bg: "white" , opacity: 1}}
+                                    _hover={{ bg: "white", opacity: 1 }}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        //TODO dodać obslugę edycji zdjęcia
-                                        //handleEditFile(idx);e
+                                        handleEditFile(idx);
                                     }}
                                 >
                                     <EditIcon />
@@ -310,14 +366,13 @@ const CreatePage = () => {
                                     opacity={0.5}
                                     borderRadius="full"
                                     color="gray.800"
-                                    _hover={{ bg: "white" , opacity: 1}}
+                                    _hover={{ bg: "white", opacity: 1 }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleRemoveFile(idx);
                                     }}
                                 />
                             </Flex>
-
                         </Box>
                     </WrapItem>
                 ))}
@@ -424,6 +479,16 @@ const CreatePage = () => {
                     </Button>
                 </VStack>
             </Box>
+            {isEditModalOpen && (
+                <PhotoEditWindow
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    file={files[editingIndex]}
+                    initialName={files[editingIndex]?.name || ""}
+                    initialTags={[...tags]}
+                    onSave={handleSaveEdit}
+                />
+            )}
         </Center>
     );
 };

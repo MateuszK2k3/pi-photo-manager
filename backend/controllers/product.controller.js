@@ -1,5 +1,6 @@
 import Photo from "../models/product.model.js";
 import mongoose from "mongoose";
+import {removeUploadedFile} from "../utils/fileStorage.js";
 
 export const getPhotos = async (req, res) => {
     try {
@@ -12,35 +13,42 @@ export const getPhotos = async (req, res) => {
 }
 
 export const createPhoto = async (req, res) => {
-    const payload = req.body;
-
-    if (Array.isArray(payload)) {
-        const invalid = payload.some(photo => !photo.filename);
-        if (invalid) {
-            return res.status(400).json({ success: false, message: 'Every photo must have a filename' });
-        }
-
-        try {
-            const newPhotos = await Photo.insertMany(payload);
-            return res.status(201).json({ success: true, data: newPhotos });
-        } catch (err) {
-            console.error("Error inserting multiple photos", err.message);
-            return res.status(500).json({ success: false, message: 'Server error while saving multiple photos' });
-        }
-    }
-
-    if (!payload.filename) {
-        return res.status(400).json({ success: false, message: 'Please provide all fields' });
-    }
-
-    const newPhoto = new Photo(payload);
-
     try {
-        await newPhoto.save();
-        res.status(201).json({ success: true, data: newPhoto });
+        // Check for files
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No files uploaded'
+            });
+        }
+
+        // Process each file
+        const photos = await Promise.all(req.files.map(async file => {
+            const photoData = {
+                filename: file.filename,
+                tags: req.body.tags ? JSON.parse(req.body.tags) : []
+            };
+
+            const newPhoto = new Photo(photoData);
+            await newPhoto.save();
+            return newPhoto;
+        }));
+
+        res.status(201).json({ success: true, data: photos });
+
     } catch (err) {
-        console.error("Error inserting single photo", err.message);
-        res.status(500).json({ success: false, message: 'Server error while saving single photo' });
+        // Cleanup uploaded files if error occurs
+        if (req.files) {
+            await Promise.all(req.files.map(file =>
+                removeUploadedFile(file.filename)
+            ));
+        }
+
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: err.message
+        });
     }
 };
 

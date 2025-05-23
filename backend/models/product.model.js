@@ -7,8 +7,7 @@ const photosSchema = new mongoose.Schema({
     },
     path: {
         type: String,
-        default: "/photos",
-        required: true,
+        default: "/photos"
     },
     tags: {
         type: Array
