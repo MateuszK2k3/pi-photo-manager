@@ -1,6 +1,8 @@
 import Photo from "../models/product.model.js";
 import mongoose from "mongoose";
 import {removeUploadedFile} from "../utils/fileStorage.js";
+import fs from "fs-extra";
+import path from "path";
 
 export const getPhotos = async (req, res) => {
     try {
@@ -52,38 +54,127 @@ export const createPhoto = async (req, res) => {
     }
 };
 
-export const updatePhoto = async(req, res) => {
-    const {photo_id} = req.params;
+export const updatePhoto = async (req, res) => {
+    const { photo_id } = req.params;
+    // Odbieramy od frontendu pole 'filename' (bez rozszerzenia) i 'tags'
+    const { filename: newNameWithoutExt, tags: newTags } = req.body;
 
-    const photo = req.body;
-
-    if(!mongoose.Types.ObjectId.isValid(photo_id)){
-        return res.status(404).json({success: false, message: 'Invalid ID'});
+    if (!mongoose.Types.ObjectId.isValid(photo_id)) {
+        return res.status(400).json({ success: false, message: "Invalid photo ID" });
     }
 
     try {
-        const updatedPhoto = await Photo.findByIdAndUpdate(photo_id, photo, {new:true})
-        res.status(200).json({success: true, data: updatedPhoto});
+        const photo = await Photo.findById(photo_id);
+        if (!photo) {
+            return res.status(404).json({ success: false, message: "Photo not found" });
+        }
+
+        // Ścieżka do folderu z obrazami
+        const uploadDir = path.join(process.cwd(), "public", "photos");
+        const oldFilename = photo.filename;                // np. "oldName.png"
+        const oldPath = path.join(uploadDir, oldFilename); // np. ".../public/photos/oldName.png"
+
+        // Pobieramy rozszerzenie, np. ".png"
+        const ext = path.extname(oldFilename);
+        const newFilename = `${newNameWithoutExt}${ext}`;   // "newName.png"
+        const newPath = path.join(uploadDir, newFilename);
+
+        // Jeśli nazwa pliku się zmieniła, przenosimy go (rename)
+        if (newFilename !== oldFilename) {
+            // Sprawdź, czy stary plik faktycznie istnieje na dysku
+            if (!(await fs.pathExists(oldPath))) {
+                return res
+                    .status(404)
+                    .json({ success: false, message: "Original file not found on disk" });
+            }
+            // Jeżeli nowy plik o tej samej nazwie już istnieje, zwracamy błąd
+            if (await fs.pathExists(newPath)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Cannot rename: file "${newFilename}" already exists.`,
+                });
+            }
+            // Próba przeniesienia
+            try {
+                await fs.move(oldPath, newPath);
+            } catch (fsErr) {
+                console.error("Error renaming file on disk:", fsErr);
+                return res.status(500).json({
+                    success: false,
+                    message: "Server error while renaming file",
+                });
+            }
+            photo.filename = newFilename;
+        }
+
+        // Zaktualizuj pola w DB: filename (jeśli zmieniło się) i tags
+        photo.tags = Array.isArray(newTags) ? newTags : [];
+        const updatedPhoto = await photo.save();
+
+        return res.status(200).json({ success: true, data: updatedPhoto });
     } catch (err) {
-        res.status(500).json({success: false, message: 'Server Error'});
+        console.error("Error in updatePhoto controller:", err);
+        return res
+            .status(500)
+            .json({ success: false, message: "Server error while updating photo" });
     }
-}
+};
 
-export const deletePhoto = async(req, res) => {
-    const {photoId} = req.params;
+export const deletePhoto = async (req, res) => {
+    const { photoId } = req.params;
 
-    if(!mongoose.Types.ObjectId.isValid(photo_id)){
-        return res.status(404).json({success: false, message: 'Invalid product ID'});
+    // Najpierw sprawdźmy poprawność ID
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid photo ID",
+        });
     }
 
     try {
+        const photo = await Photo.findById(photoId);
+        if (!photo) {
+            return res.status(404).json({
+                success: false,
+                message: "Photo not found in database",
+            });
+        }
+
+        // 1) Usuń plik z dysku
+        const uploadDir = path.join(process.cwd(), "public", "photos");
+        const filePath = path.join(uploadDir, photo.filename);
+
+        // Sprawdź, czy plik istnieje
+        if (await fs.pathExists(filePath)) {
+            try {
+                await fs.unlink(filePath);
+            } catch (fsErr) {
+                console.error("Error deleting file from disk:", fsErr);
+                return res.status(500).json({
+                    success: false,
+                    message: "Server error while deleting file",
+                });
+            }
+        } else {
+            // Jeśli pliku już nie ma, to i tak usuwamy wpis z bazy, ale logujemy
+            console.warn("File not found on disk:", filePath);
+        }
+
+        // 2) Usuń dokument z bazy
         await Photo.findByIdAndDelete(photoId);
-        res.status(200).json({success: true, message: 'Photo deleted'});
-    } catch(err) {
-        console.log("Error in deleting new photo", err.message);
-        res.status(500).json({success: false, message: 'Server Error'});
+
+        return res.status(200).json({
+            success: true,
+            message: "Photo deleted successfully",
+        });
+    } catch (err) {
+        console.error("Error in deletePhoto controller:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while deleting photo",
+        });
     }
-}
+};
 
 export const checkDuplicates = async(req, res) => {
     try {

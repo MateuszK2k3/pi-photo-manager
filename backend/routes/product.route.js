@@ -7,7 +7,7 @@ const router = express.Router();
 export default router;
 
 router.get('/', getPhotos)
-router.post('/', uploadMiddleware, createPhoto);
+router.post('/', uploadMiddleware, createPhoto)
 router.post('/check-duplicates', checkDuplicates)
-router.put('/:photo_id', updatePhoto)
+router.put("/:photo_id", updatePhoto)
 router.delete('/:photoId', deletePhoto)

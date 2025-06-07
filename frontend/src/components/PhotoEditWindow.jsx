@@ -1,3 +1,6 @@
+// frontend/src/components/PhotoEditWindow.jsx
+
+import React, { useEffect, useState } from "react";
 import {
     Modal,
     ModalOverlay,
@@ -20,44 +23,70 @@ import {
     Text,
     useToast,
     Flex,
-    useColorModeValue
+    useColorModeValue,
 } from "@chakra-ui/react";
-import { useState } from "react";
 import { AddIcon } from "@chakra-ui/icons";
 
 const PhotoEditWindow = ({
                              isOpen,
                              onClose,
                              file,
+                             imageSrc,
                              initialName,
                              initialTags = [],
-                             onSave
+                             onSave,
                          }) => {
     const [name, setName] = useState(initialName);
     const [tags, setTags] = useState(initialTags);
     const [newTag, setNewTag] = useState("");
     const [isAddingTag, setIsAddingTag] = useState(false);
+    const [fileInfo, setFileInfo] = useState(null); // { size, type, lastModified }
     const toast = useToast();
 
-    // Kolory dla trybu nocnego/dziennego
-    const bgColor = useColorModeValue("white", "gray.700");
-    const borderColor = useColorModeValue("gray.200", "gray.600");
-    const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
-    const subtleTextColor = useColorModeValue("gray.600", "gray.400");
-    const detailBg = useColorModeValue("gray.50", "gray.600");
-    const tagBg = useColorModeValue("blue.100", "blue.800");
-    const tagText = useColorModeValue("blue.800", "blue.100");
+    useEffect(() => {
+        if (isOpen) {
+            setName(initialName);
+            setTags(initialTags);
+            setNewTag("");
+            setIsAddingTag(false);
+            setFileInfo(null);
+
+            // Jeśli mamy imageSrc (czyli edycja istniejącego zdjęcia),
+            // pobierzemy nagłówki HEAD, by uzyskać content-length i last-modified
+            if (imageSrc) {
+                fetch(imageSrc, { method: "HEAD" })
+                    .then((res) => {
+                        const sizeHeader = res.headers.get("content-length");
+                        const lastModHeader = res.headers.get("last-modified");
+                        const typeHeader = res.headers.get("content-type");
+                        const sizeKB = sizeHeader
+                            ? `${(Number(sizeHeader) / 1024).toFixed(2)} KB`
+                            : "—";
+                        const type = typeHeader || "—";
+                        const lastModified = lastModHeader
+                            ? new Date(lastModHeader).toLocaleDateString()
+                            : "—";
+                        setFileInfo({ size: sizeKB, type, lastModified });
+                    })
+                    .catch(() => {
+                        // Jeśli HEAD się nie powiedzie, po prostu nic nie ustawiamy
+                        setFileInfo(null);
+                    });
+            }
+        }
+    }, [isOpen, initialName, initialTags, imageSrc]);
 
     const handleAddTag = () => {
-        if (newTag.trim() && !tags.includes(newTag.trim())) {
-            setTags([...tags, newTag.trim()]);
-            setNewTag("");
+        const trimmed = newTag.trim();
+        if (trimmed && !tags.includes(trimmed)) {
+            setTags((prev) => [...prev, trimmed]);
         }
+        setNewTag("");
         setIsAddingTag(false);
     };
 
     const handleRemoveTag = (index) => {
-        setTags(tags.filter((_, i) => i !== index));
+        setTags((prev) => prev.filter((_, i) => i !== index));
     };
 
     const handleSave = () => {
@@ -71,25 +100,32 @@ const PhotoEditWindow = ({
             });
             return;
         }
-
         onSave({
             name: name.trim(),
             tags: [...tags],
         });
-        onClose();
+        // Zamykanie modala zostawiamy HomePage (po otrzymaniu odpowiedzi)
     };
 
-    const getImageInfo = () => {
-        if (!file) return null;
+    // Kolory:
+    const bgColor = useColorModeValue("white", "gray.700");
+    const borderColor = useColorModeValue("gray.200", "gray.600");
+    const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
+    const subtleTextColor = useColorModeValue("gray.600", "gray.400");
+    const detailBg = useColorModeValue("gray.50", "gray.600");
+    const tagBg = useColorModeValue("blue.100", "blue.800");
+    const tagText = useColorModeValue("blue.800", "blue.100");
 
+    // Funkcja pomocnicza: pobierz dane z obiektu File
+    const getLocalFileInfo = () => {
+        if (!file) return null;
         return {
             size: `${(file.size / 1024).toFixed(2)} KB`,
             type: file.type,
             lastModified: new Date(file.lastModified).toLocaleDateString(),
         };
     };
-
-    const imageInfo = getImageInfo();
+    const localInfo = getLocalFileInfo();
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="xl">
@@ -99,7 +135,7 @@ const PhotoEditWindow = ({
                 <ModalCloseButton />
                 <ModalBody>
                     <Stack spacing={6}>
-                        {/* Podgląd zdjęcia */}
+                        {/* ==== Podgląd zdjęcia ==== */}
                         <Box
                             border="1px solid"
                             borderColor={borderColor}
@@ -107,7 +143,7 @@ const PhotoEditWindow = ({
                             overflow="hidden"
                         >
                             <Image
-                                src={file ? URL.createObjectURL(file) : ""}
+                                src={imageSrc ? imageSrc : file ? URL.createObjectURL(file) : ""}
                                 alt={`Preview of ${name}`}
                                 objectFit="contain"
                                 maxH="300px"
@@ -116,9 +152,11 @@ const PhotoEditWindow = ({
                             />
                         </Box>
 
-                        {/* Nazwa zdjęcia */}
+                        {/* ==== Nazwa ==== */}
                         <FormControl>
-                            <FormLabel color={textColor} fontWeight="semibold">Photo Name</FormLabel>
+                            <FormLabel color={textColor} fontWeight="semibold">
+                                Photo Name
+                            </FormLabel>
                             <Input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -130,13 +168,15 @@ const PhotoEditWindow = ({
                             />
                         </FormControl>
 
-                        {/* Tagi */}
+                        {/* ==== Tagi ==== */}
                         <FormControl>
-                            <FormLabel color={textColor} fontWeight="semibold">Tags</FormLabel>
+                            <FormLabel color={textColor} fontWeight="semibold">
+                                Tags
+                            </FormLabel>
                             <HStack spacing={2} flexWrap="wrap" mb={2}>
-                                {tags.map((tag, index) => (
+                                {tags.map((tag, idx) => (
                                     <Tag
-                                        key={index}
+                                        key={idx}
                                         size="md"
                                         bg={tagBg}
                                         color={tagText}
@@ -145,7 +185,7 @@ const PhotoEditWindow = ({
                                         <TagLabel>{tag}</TagLabel>
                                         <TagCloseButton
                                             color={tagText}
-                                            onClick={() => handleRemoveTag(index)}
+                                            onClick={() => handleRemoveTag(idx)}
                                         />
                                     </Tag>
                                 ))}
@@ -178,8 +218,10 @@ const PhotoEditWindow = ({
                             </Flex>
                         </FormControl>
 
-                        {/* Dane zdjęcia */}
-                        {imageInfo && (
+                        {/* ==== Dane pliku ==== */}
+                        {/* Jeśli mamy obiekt `file`, wyświetlamy dane lokalnego pliku. */}
+                        {/* W przeciwnym wypadku (edycja galerii), wyświetlamy dane z nagłówka HEAD. */}
+                        {(localInfo || fileInfo) && (
                             <Box
                                 border="1px solid"
                                 borderColor={borderColor}
@@ -187,28 +229,28 @@ const PhotoEditWindow = ({
                                 p={4}
                                 bg={detailBg}
                             >
-                                <Text
-                                    color={textColor}
-                                    fontWeight="semibold"
-                                    mb={3}
-                                >
+                                <Text color={textColor} fontWeight="semibold" mb={3}>
                                     Photo Details
                                 </Text>
                                 <Stack spacing={3}>
                                     <Flex justify="space-between" align="center">
                                         <Text color={subtleTextColor}>Size:</Text>
-                                        <Text color={textColor}>{imageInfo.size}</Text>
+                                        <Text color={textColor}>
+                                            {localInfo ? localInfo.size : fileInfo.size}
+                                        </Text>
                                     </Flex>
                                     <Flex justify="space-between" align="center">
                                         <Text color={subtleTextColor}>Type:</Text>
                                         <Text color={textColor}>
-                                            {imageInfo.type.split('/')[1].toUpperCase()}
+                                            {localInfo
+                                                ? localInfo.type.split("/")[1].toUpperCase()
+                                                : fileInfo.type.split("/")[1].toUpperCase()}
                                         </Text>
                                     </Flex>
                                     <Flex justify="space-between" align="center">
                                         <Text color={subtleTextColor}>Modified:</Text>
                                         <Text color={textColor}>
-                                            {imageInfo.lastModified}
+                                            {localInfo ? localInfo.lastModified : fileInfo.lastModified}
                                         </Text>
                                     </Flex>
                                 </Stack>
@@ -217,24 +259,19 @@ const PhotoEditWindow = ({
                     </Stack>
                 </ModalBody>
 
-                <ModalFooter
-                    borderTop="1px solid"
-                    borderColor={borderColor}
-                    bg={bgColor}
-                >
+                <ModalFooter borderTop="1px solid" borderColor={borderColor} bg={bgColor}>
                     <Button
                         variant="outline"
                         mr={3}
-                        onClick={onClose}
+                        onClick={() => {
+                            onClose();
+                        }}
                         borderColor={borderColor}
                         _hover={{ bg: detailBg }}
                     >
                         Cancel
                     </Button>
-                    <Button
-                        colorScheme="blue"
-                        onClick={handleSave}
-                    >
+                    <Button colorScheme="blue" onClick={handleSave}>
                         Save Changes
                     </Button>
                 </ModalFooter>
