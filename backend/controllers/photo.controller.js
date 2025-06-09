@@ -1,4 +1,4 @@
-import Photo from "../models/product.model.js";
+import Photo from "../models/photo.model.js";
 import mongoose from "mongoose";
 import {removeUploadedFile} from "../utils/fileStorage.js";
 import fs from "fs-extra";

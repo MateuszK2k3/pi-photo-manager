@@ -25,13 +25,14 @@ import {
     Button,
 } from "@chakra-ui/react";
 import { DeleteIcon, EditIcon } from "@chakra-ui/icons";
-
+import { useAuth } from "../components/AuthContext";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
 import PhotoEditWindow from "../components/PhotoEditWindow";
 
 const HomePage = () => {
+    const { token } = useAuth();
     // 1) Surowe dane z API
     const [rawPhotos, setRawPhotos] = useState([]);
     // 2) Przetworzone z wymiarami + tagami + filename
@@ -66,7 +67,12 @@ const HomePage = () => {
     useEffect(() => {
         const fetchPhotos = async () => {
             try {
-                const res = await fetch("/api/photos");
+                const res = await fetch('/api/photos', {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: token ? `Bearer ${token}` : '',
+                    },
+                });
                 const json = await res.json();
                 if (json.success && Array.isArray(json.data)) {
                     setRawPhotos(json.data);
@@ -79,7 +85,7 @@ const HomePage = () => {
             }
         };
         fetchPhotos();
-    }, []);
+    }, [token]);
 
     // --- Przelicz unikalne tagi na podstawie rawPhotos ---
     const recalcUniqueTags = (photosArray) => {
@@ -121,7 +127,7 @@ const HomePage = () => {
         Promise.all(promises).then((results) => {
             const filtered = results.filter((x) => x !== null);
             setPhotosWithSize(filtered);
-            setLoading(false); // <-- dopiero tutaj
+            setLoading(false);
         });
     }, [rawPhotos]);
 
@@ -141,7 +147,12 @@ const HomePage = () => {
         try {
             const res = await fetch(`/api/photos/${photoId}`, {
                 method: "DELETE",
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
             });
+
             const json = await res.json();
             if (json.success) {
                 // 1) Usuń z rawPhotos
@@ -203,7 +214,10 @@ const HomePage = () => {
         try {
             const res = await fetch(`/api/photos/${photoId}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: token ? `Bearer ${token}` : '',
+                    },
                 body: JSON.stringify({
                     filename: newName,
                     tags: newTags,
