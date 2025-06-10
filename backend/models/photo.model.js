@@ -7,14 +7,19 @@ const photosSchema = new mongoose.Schema({
     },
     path: {
         type: String,
-        default: "/photos"
+        required: true,
     },
     tags: {
         type: Array
+    },
+    owner: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     }
 }, {
     timestamps: true
-})
+});
 
 const Photo = mongoose.model('Photos', photosSchema);
 

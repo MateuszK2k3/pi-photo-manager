@@ -24,6 +24,7 @@ import {
 import {AddIcon, DeleteIcon, EditIcon} from "@chakra-ui/icons";
 import {usePhotoStore} from "../store/photo.js";
 import PhotoEditWindow from "../components/PhotoEditWindow.jsx";
+import {useAuth} from "../components/AuthContext.jsx";
 
 const CreatePage = () => {
     const [files, setFiles] = useState([]);
@@ -40,6 +41,8 @@ const CreatePage = () => {
     const toast = useToast()
 
     const {checkForDuplicates} = usePhotoStore()
+
+    const { token } = useAuth();
 
     const verifyDuplicates = async () => {
         if (files.length === 0) return;
@@ -107,6 +110,9 @@ const CreatePage = () => {
 
             const response = await fetch('/api/photos', {
                 method: 'POST',
+                headers: token
+                    ? { Authorization: `Bearer ${token}` }
+                    : {},
                 body: formData,
             });
 

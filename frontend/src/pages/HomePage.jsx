@@ -26,6 +26,7 @@ import {
 } from "@chakra-ui/react";
 import { DeleteIcon, EditIcon } from "@chakra-ui/icons";
 import { useAuth } from "../components/AuthContext";
+import { Link as RouterLink } from "react-router-dom";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
@@ -33,39 +34,25 @@ import PhotoEditWindow from "../components/PhotoEditWindow";
 
 const HomePage = () => {
     const { token } = useAuth();
-    // 1) Surowe dane z API
     const [rawPhotos, setRawPhotos] = useState([]);
-    // 2) Przetworzone z wymiarami + tagami + filename
     const [photosWithSize, setPhotosWithSize] = useState([]);
-    // 3) Spinner ładowania
     const [loading, setLoading] = useState(true);
-
-    // 4) Lightbox
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
-
-    // 5) Filtr tagów
     const [selectedTags, setSelectedTags] = useState([]);
     const [uniqueTags, setUniqueTags] = useState([]);
-
-    // 6) Stan edycji
     const [editOpen, setEditOpen] = useState(false);
     const [editPhoto, setEditPhoto] = useState(null);
-
-    // 7) Stan potwierdzenia usunięcia
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [photoToDelete, setPhotoToDelete] = useState(null);
-    const cancelRef = useRef(); // do AlertDialog
-
-    // 8) Toast do komunikatów
+    const cancelRef = useRef();
     const toast = useToast();
 
-    // 9) Liczba kolumn
     const columns = useBreakpointValue({ base: 2, sm: 2, md: 3, lg: 5 });
 
-    // --- Fetch danych z backendu ---
     useEffect(() => {
         const fetchPhotos = async () => {
+            setLoading(true);
             try {
                 const res = await fetch('/api/photos', {
                     headers: {
@@ -83,8 +70,12 @@ const HomePage = () => {
             } catch (err) {
                 console.error("Błąd pobierania zdjęć:", err);
             }
+            finally {
+                setLoading(false);
+            }
         };
         fetchPhotos();
+        if (token) fetchPhotos();
     }, [token]);
 
     // --- Przelicz unikalne tagi na podstawie rawPhotos ---
@@ -288,9 +279,16 @@ const HomePage = () => {
 
     // --- Spinner podczas ładowania ---
     if (loading) {
+        return (<Center h="80vh"><Spinner size="xl"/></Center>);
+    }
+
+    if (photosWithSize.length === 0) {
         return (
-            <Center h="80vh" >
-                <Spinner size="xl" />
+            <Center h="80vh" flexDir="column" textAlign="center" px={4}>
+                <Text fontSize="2xl" mb={4}>Brak zdjęć w Twojej galerii.</Text>
+                <Button as={RouterLink} to="/create" colorScheme="blue" size="lg">
+                    Dodaj pierwsze zdjęcia
+                </Button>
             </Center>
         );
     }
@@ -303,9 +301,6 @@ const HomePage = () => {
 
     return (
         <>
-            {/* ------------------------------------------------ */}
-            {/* Pasek filtrowania po tagach */}
-            {/* ------------------------------------------------ */}
             {uniqueTags.length > 0 && (
                 <Box px={{ base: "8px", sm: "12px", md: "16px", lg: "32px" }} mb="16px">
                     <Text mb="8px" fontWeight="semibold">
@@ -331,9 +326,6 @@ const HomePage = () => {
                 </Box>
             )}
 
-            {/* ------------------------------------------------ */}
-            {/* Kontener galerii */}
-            {/* ------------------------------------------------ */}
             <Box px={{ base: "8px", sm: "12px", md: "16px", lg: "32px" }}>
                 <Box
                     sx={{
@@ -437,9 +429,6 @@ const HomePage = () => {
                 </Box>
             </Box>
 
-            {/* ------------------------------------------------ */}
-            {/* Lightbox */}
-            {/* ------------------------------------------------ */}
             {lightboxOpen && (
                 <Lightbox
                     open={lightboxOpen}
@@ -462,9 +451,6 @@ const HomePage = () => {
                 />
             )}
 
-            {/* ------------------------------------------------ */}
-            {/* Modal edycji */}
-            {/* ------------------------------------------------ */}
             <PhotoEditWindow
                 isOpen={editOpen}
                 onClose={() => {
@@ -478,9 +464,6 @@ const HomePage = () => {
                 file={null}
             />
 
-            {/* ------------------------------------------------ */}
-            {/* AlertDialog potwierdzenia usunięcia */}
-            {/* ------------------------------------------------ */}
             <AlertDialog
                 isOpen={deleteOpen}
                 leastDestructiveRef={cancelRef}

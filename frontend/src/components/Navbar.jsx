@@ -33,7 +33,12 @@ const Navbar = () => {
                     bgGradient="linear(to-r, cyan.500, purple.500)"
                     bgClip="text"
                 >
-                    <RouterLink to="/">Gallery</RouterLink>
+                    {user ? (
+                        <RouterLink to="/dashboard">Gallery</RouterLink>
+                    ) : (
+                        <RouterLink to="/login">Gallery</RouterLink>
+                    )
+                    }
                 </Text>
 
                 <HStack spacing={2} alignItems="center">

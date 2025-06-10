@@ -4,14 +4,20 @@ export const usePhotoStore = create((set) => ({
     photos: [],
     setPhotos: (photos) => set({ photos }),
     checkForDuplicates: async (filenames) => {
-        const res = await fetch("/api/photos/check-duplicates", {
-            method: "POST",
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/photos/check-duplicates', {
+            method: 'POST',
             headers: {
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({ filenames })
+            body: JSON.stringify({ filenames }),
         });
-        return await res.json();
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.message || 'Unauthorized');
+        }
+        return res.json();
     },
 
     createPhoto: async (newPhoto) => {

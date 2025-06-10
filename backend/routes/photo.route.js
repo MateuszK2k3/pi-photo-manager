@@ -1,22 +1,21 @@
 import express from 'express';
-import { protect } from '../middlewares/auth.middleware.js';
 import {
-    checkDuplicates,
-    createPhoto,
-    deletePhoto,
     getPhotos,
+    createPhoto,
     updatePhoto,
+    deletePhoto,
+    checkDuplicates
 } from '../controllers/photo.controller.js';
-import { uploadMiddleware } from '../utils/fileStorage.js';
+import { protect } from '../middlewares/auth.middleware.js';
+import upload from '../middlewares/upload.middleware.js';
 
 const router = express.Router();
 
 router.use(protect);
-
-router.get('/', getPhotos);
-router.post('/', uploadMiddleware, createPhoto);
-router.post('/check-duplicates', checkDuplicates);
-router.put('/:photo_id', updatePhoto);
-router.delete('/:photoId', deletePhoto);
+router.get('/', protect, getPhotos);
+router.post('/', protect, upload.array('photos'), createPhoto);
+router.put('/:photo_id', protect, updatePhoto);
+router.delete('/:photoId', protect, deletePhoto);
+router.post('/check-duplicates', protect, checkDuplicates);
 
 export default router;

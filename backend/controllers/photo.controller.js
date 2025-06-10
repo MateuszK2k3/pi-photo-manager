@@ -6,17 +6,22 @@ import path from "path";
 
 export const getPhotos = async (req, res) => {
     try {
-        const products = await Photo.find({});
-        res.status(200).json({success: true, data: products});
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const photos = await Photo.find({ owner: userId });
+        res.status(200).json({ success: true, data: photos });
     } catch (err) {
-        console.error("Error on getting products", err.message);
-        res.status(500).json({success: false, message: "Server Error"});
+        console.error("Error on getting photos:", err.message);
+        res.status(500).json({ success: false, message: "Server error" });
     }
-}
+};
+
 
 export const createPhoto = async (req, res) => {
     try {
-        // Check for files
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -24,11 +29,21 @@ export const createPhoto = async (req, res) => {
             });
         }
 
-        // Process each file
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized: user ID missing in token'
+            });
+        }
+
         const photos = await Promise.all(req.files.map(async file => {
+            const relPath = `/photos/${req.user.login}`;
             const photoData = {
-                filename: file.filename,
-                tags: req.body.tags ? JSON.parse(req.body.tags) : []
+                filename: file.originalname,
+                path:     relPath,
+                tags:     JSON.parse(req.body.tags || '[]'),
+                owner:    userId
             };
 
             const newPhoto = new Photo(photoData);
@@ -39,7 +54,6 @@ export const createPhoto = async (req, res) => {
         res.status(201).json({ success: true, data: photos });
 
     } catch (err) {
-        // Cleanup uploaded files if error occurs
         if (req.files) {
             await Promise.all(req.files.map(file =>
                 removeUploadedFile(file.filename)
@@ -70,14 +84,14 @@ export const updatePhoto = async (req, res) => {
         }
 
         // Ścieżka do folderu z obrazami
-        const uploadDir = path.join(process.cwd(), "public", "photos");
+        const uploadDir = path.join(process.cwd(), photo.path.replace(/^\/photos\//, 'public/photos/'));
         const oldFilename = photo.filename;                // np. "oldName.png"
-        const oldPath = path.join(uploadDir, oldFilename); // np. ".../public/photos/oldName.png"
+        const oldPath = path.join(uploadDir, photo.filename);
 
         // Pobieramy rozszerzenie, np. ".png"
         const ext = path.extname(oldFilename);
         const newFilename = `${newNameWithoutExt}${ext}`;   // "newName.png"
-        const newPath = path.join(uploadDir, newFilename);
+        const newPath = path.join(uploadDir, photo.filename);
 
         // Jeśli nazwa pliku się zmieniła, przenosimy go (rename)
         if (newFilename !== oldFilename) {
@@ -141,7 +155,7 @@ export const deletePhoto = async (req, res) => {
         }
 
         // 1) Usuń plik z dysku
-        const uploadDir = path.join(process.cwd(), "public", "photos");
+        const uploadDir = path.join(process.cwd(), photo.path.replace(/^\/photos\//, 'public/photos/'));
         const filePath = path.join(uploadDir, photo.filename);
 
         // Sprawdź, czy plik istnieje
@@ -176,15 +190,26 @@ export const deletePhoto = async (req, res) => {
     }
 };
 
-export const checkDuplicates = async(req, res) => {
+export const checkDuplicates = async (req, res) => {
     try {
-        const { filenames } = req.body;
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const filenames = req.body.filenames || JSON.parse(req.body.originalNames || '[]');
+
         const duplicates = await Photo.find({
+            owner: userId,
             filename: { $in: filenames }
         }).select('filename');
 
-        res.json({success: true, duplicates: duplicates.map(d => d.filename)});
-    } catch (error) {
-        res.status(500).json({success: false, message: error.message});
+        res.json({
+            success:    true,
+            duplicates: duplicates.map(d => d.filename)
+        });
+    } catch (err) {
+        console.error('Error checking duplicates:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
-}
+};
