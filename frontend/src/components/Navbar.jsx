@@ -1,5 +1,5 @@
 import {
-    Button, Container, Flex, HStack, Text, useColorMode, useColorModeValue
+    Button, Container, Flex, HStack, Spacer, Text, useColorMode, useColorModeValue
 } from '@chakra-ui/react';
 import { PlusSquareIcon } from '@chakra-ui/icons';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -58,7 +58,12 @@ const Navbar = () => {
                     ) : (
                         <>
                             <Text fontWeight="semibold">Witaj, {user.login}!</Text>
-                            <Button variant="ghost" size="sm" onClick={handleLogout}>
+                            <RouterLink to="/groups" >
+                                <Button variant="outline" size="sm">
+                                    Grupy
+                                </Button>
+                            </RouterLink>
+                            <Button variant="outline" size="sm" onClick={handleLogout}>
                                 Logout
                             </Button>
                         </>

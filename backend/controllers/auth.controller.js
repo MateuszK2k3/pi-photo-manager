@@ -1,5 +1,7 @@
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
+import Group from "../models/group.model.js";
+import mongoose from "mongoose";
 
 const generateToken = (user) => {
     return jwt.sign(
@@ -50,5 +52,47 @@ export const loginUser = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Błąd serwera.' });
+    }
+};
+
+export const getUserInvitations = async (req, res) => {
+    try {
+        const userId = req.params.userId;
+
+        // Poprawna konwersja string ID na ObjectId
+        const userIdObj = new mongoose.Types.ObjectId(userId);
+
+        const groups = await Group.find({
+            pendingInvites: userIdObj
+        })
+            .populate('owner', 'login')
+            .select('_id name description owner createdAt')
+            .lean(); // Dodaj lean() dla lepszej wydajności
+
+        const invitations = groups.map(group => ({
+            _id: group._id,
+            group: {
+                _id: group._id,
+                name: group.name,
+                description: group.description
+            },
+            owner: {
+                _id: group.owner._id,
+                login: group.owner.login
+            },
+            createdAt: group.createdAt
+        }));
+
+        res.json({
+            success: true,
+            data: invitations
+        });
+    } catch (error) {
+        console.error('Błąd pobierania zaproszeń:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Błąd serwera',
+            error: error.message
+        });
     }
 };

@@ -19,27 +19,39 @@ const decodeToken = (token) => {
     }
 };
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(null);
+    const [token, setToken] = useState(localStorage.getItem('token'));
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const t = localStorage.getItem('token');
-        if (t) {
-            const decoded = decodeToken(t);
-            if (decoded && Date.now() < decoded.exp * 1000) {
-                setToken(t);
-                setUser({ login: decoded.login });
-            } else {
-                localStorage.removeItem('token');
+        const initializeAuth = async () => {
+            if (token) {
+                try {
+                    // Dekoduj token JWT aby uzyskać dane użytkownika
+                    const decoded = JSON.parse(atob(token.split('.')[1]));
+                    setUser({
+                        _id: decoded.userId, // Używamy userId z tokena
+                        login: decoded.login
+                    });
+                } catch (error) {
+                    console.error('Błąd dekodowania tokena:', error);
+                    localStorage.removeItem('token');
+                }
             }
-        }
-    }, []);
+            setLoading(false);
+        };
 
-    const login = (newToken, login) => {
+        initializeAuth();
+    }, [token]);
+
+    const login = (newToken, userData) => {
         localStorage.setItem('token', newToken);
         setToken(newToken);
-        setUser({ login });
+        setUser({
+            _id: userData._id || userData.userId,
+            login: userData.login
+        });
     };
 
     const logout = () => {
@@ -49,11 +61,13 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, logout }}>
-            {children}
+        <AuthContext.Provider value={{ token, user, login, logout, loading }}>
+            {!loading && children}
         </AuthContext.Provider>
     );
-};
+}
+
+
 
 // hook
 export const useAuth = () => useContext(AuthContext);

@@ -10,12 +10,20 @@ const photosSchema = new mongoose.Schema({
         required: true,
     },
     tags: {
-        type: Array
+        type: [String],
+        default: []
     },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    sharedWithGroups: {
+        type: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Group'
+        }],
+        default: []
     }
 }, {
     timestamps: true

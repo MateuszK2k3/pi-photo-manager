@@ -4,6 +4,7 @@ import {connectDB} from "./config/db.js";
 import productRoute from "./routes/photo.route.js";
 import path from "path";
 import authRoute from "./routes/auth.route.js";
+import groupRoute from "./routes/group.route.js";
 
 dotenv.config()
 
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 app.use('/api/photos', productRoute);
 app.use('/api/auth', authRoute);
 app.use('/photos', express.static(path.join(process.cwd(), 'public/photos')));
+app.use('/api/groups', groupRoute);
+
 app.use(express.urlencoded({ extended: true }));
 
 app.listen(PORT, () => {

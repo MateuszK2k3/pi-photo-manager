@@ -22,7 +22,7 @@ import {
     AlertDialogHeader,
     AlertDialogContent,
     AlertDialogOverlay,
-    Button,
+    Button, RadioGroup, Radio, Select, HStack, Heading, VStack, Avatar, Tabs, TabList, Tab, Collapse, useColorModeValue,
 } from "@chakra-ui/react";
 import { DeleteIcon, EditIcon } from "@chakra-ui/icons";
 import { useAuth } from "../components/AuthContext";
@@ -31,9 +31,10 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
 import PhotoEditWindow from "../components/PhotoEditWindow";
+import * as myGroups from "framer-motion/m";
 
 const HomePage = () => {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [rawPhotos, setRawPhotos] = useState([]);
     const [photosWithSize, setPhotosWithSize] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -46,20 +47,47 @@ const HomePage = () => {
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [photoToDelete, setPhotoToDelete] = useState(null);
     const cancelRef = useRef();
+    const [view, setView] = useState('mine');
+    const [myGroups, setMyGroups] = useState([]);
+    const [groupFilter, setGroupFilter] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState(null);
     const toast = useToast();
 
+    const bgPage  = useColorModeValue("white","gray.800");
+    const panelBorder = useColorModeValue("gray.300","gray.600");
+
     const columns = useBreakpointValue({ base: 2, sm: 2, md: 3, lg: 5 });
+
+    useEffect(() => {
+        if (!token) return;
+
+        fetch('/api/groups', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) setMyGroups(j.data);
+            });
+    }, [token]);
+
 
     useEffect(() => {
         const fetchPhotos = async () => {
             setLoading(true);
             try {
-                const res = await fetch('/api/photos', {
+                const params = new URLSearchParams();
+                if (view === 'group' && groupFilter) {
+                    params.append('group', groupFilter);
+                }
+
+                const url = `/api/photos${params.toString() ? '?' + params.toString() : ''}`;
+                const res = await fetch(url, {
                     headers: {
                         'Content-Type': 'application/json',
-                        Authorization: token ? `Bearer ${token}` : '',
-                    },
+                        Authorization: `Bearer ${token}`
+                    }
                 });
+
                 const json = await res.json();
                 if (json.success && Array.isArray(json.data)) {
                     setRawPhotos(json.data);
@@ -69,14 +97,35 @@ const HomePage = () => {
                 }
             } catch (err) {
                 console.error("Błąd pobierania zdjęć:", err);
-            }
-            finally {
+                toast({
+                    title: "Błąd",
+                    description: "Nie udało się pobrać zdjęć",
+                    status: "error",
+                    duration: 3000,
+                    isClosable: true,
+                });
+            } finally {
                 setLoading(false);
             }
         };
-        fetchPhotos();
-        if (token) fetchPhotos();
-    }, [token]);
+
+        if (token && (view === 'mine' || (view === 'group' && groupFilter))) {
+            fetchPhotos();
+
+            // Pobierz informacje o wybranej grupie
+            if (view === 'group' && groupFilter) {
+                fetch(`/api/groups/${groupFilter}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+                    .then(r => r.json())
+                    .then(j => {
+                        if (j.success) setSelectedGroup(j.data);
+                    });
+            } else {
+                setSelectedGroup(null);
+            }
+        }
+    }, [token, view, groupFilter]);
 
     // --- Przelicz unikalne tagi na podstawie rawPhotos ---
     const recalcUniqueTags = (photosArray) => {
@@ -106,6 +155,7 @@ const HomePage = () => {
                         height: img.naturalHeight,
                         tags: Array.isArray(p.tags) ? p.tags : [],
                         filename: p.filename,
+                        owner: p.owner
                     });
                 };
                 img.onerror = () => {
@@ -207,7 +257,7 @@ const HomePage = () => {
                 method: "PUT",
                     headers: {
                         'Content-Type': 'application/json',
-                        Authorization: token ? `Bearer ${token}` : '',
+                        Authorization: `Bearer ${token}`,
                     },
                 body: JSON.stringify({
                     filename: newName,
@@ -301,15 +351,62 @@ const HomePage = () => {
 
     return (
         <>
-            {uniqueTags.length > 0 && (
-                <Box px={{ base: "8px", sm: "12px", md: "16px", lg: "32px" }} mb="16px">
-                    <Text mb="8px" fontWeight="semibold">
+            <Box px={{ base: "8px", sm: "12px", md: "16px", lg: "32px" }} mb="4">
+                <Tabs
+                    index={view === "group" ? 1 : 0}
+                    onChange={(i) => setView(i === 0 ? "mine" : "group")}
+                    variant="line"            // mniej wyróżniający się
+                    colorScheme="gray"        // neutralny kolor
+                    isFitted
+                    mb={2}
+                >
+                    <TabList borderBottomColor={panelBorder}>
+                        <Tab>Moje zdjęcia</Tab>
+                        <Tab>Zdjęcia grupy</Tab>
+                    </TabList>
+                </Tabs>
+
+                <Collapse in={view === "group"} animateOpacity>
+                    <Box
+                        mb={4}
+                        p={4}
+                        bg={bgPage}             // takie samo tło jak strona
+                        border="1px solid"
+                        borderColor={panelBorder}
+                        borderRadius="md"
+                    >
+                        {selectedGroup && (
+                            <VStack align="start" spacing={1} mb={3}>
+                                <Heading size="md">{selectedGroup.name}</Heading>
+                                <Text color={useColorModeValue("gray.600","gray.400")}>
+                                    {selectedGroup.description || "Brak opisu"}
+                                </Text>
+                            </VStack>
+                        )}
+                        <Select
+                            placeholder="Wybierz grupę"
+                            mb={2}
+                            value={groupFilter}
+                            onChange={(e) => setGroupFilter(e.target.value)}
+                        >
+                            {myGroups.map((g) => (
+                                <option key={g._id} value={g._id}>
+                                    {g.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Box>
+                </Collapse>
+
+                {/* Filtr tagów zawsze pod zakładkami */}
+                <Box mb={6}>
+                    <Text mb="4px" fontWeight="semibold">
                         Filtruj po tagach:
                     </Text>
                     <CheckboxGroup
                         colorScheme="blue"
                         value={selectedTags}
-                        onChange={(vals) => setSelectedTags(vals)}
+                        onChange={setSelectedTags}
                     >
                         <Stack
                             direction={{ base: "column", sm: "row" }}
@@ -324,7 +421,7 @@ const HomePage = () => {
                         </Stack>
                     </CheckboxGroup>
                 </Box>
-            )}
+            </Box>
 
             <Box px={{ base: "8px", sm: "12px", md: "16px", lg: "32px" }}>
                 <Box
@@ -350,6 +447,28 @@ const HomePage = () => {
                                 setLightboxOpen(true);
                             }}
                         >
+                            {view === 'group' && (
+                                <Box
+                                    position="absolute"
+                                    top="4px"
+                                    left="4px"
+                                    display="none"
+                                    _groupHover={{ display: "flex" }}
+                                    alignItems="center"
+                                    bg="rgba(0, 0, 0, 0.6)"
+                                    px="6px"
+                                    py="2px"
+                                    borderRadius="md"
+                                    zIndex={2}
+                                >
+                                    <HStack spacing="4px">
+                                        <Avatar size="xs" name={photo.owner.login} />
+                                        <Text fontSize="xs" color="white">
+                                            {photo.owner.login}
+                                        </Text>
+                                    </HStack>
+                                </Box>
+                            )}
                             <Img
                                 src={photo.src}
                                 alt={`Photo-${photo.id}`}

@@ -19,12 +19,13 @@ import {
     WrapItem,
     CloseButton,
     Tooltip,
-    Heading, useToast, UnorderedList, ListItem, Flex
+    Heading, useToast, UnorderedList, ListItem, Flex, CheckboxGroup, Checkbox
 } from "@chakra-ui/react";
 import {AddIcon, DeleteIcon, EditIcon} from "@chakra-ui/icons";
 import {usePhotoStore} from "../store/photo.js";
 import PhotoEditWindow from "../components/PhotoEditWindow.jsx";
 import {useAuth} from "../components/AuthContext.jsx";
+import * as myGroups from "framer-motion/m";
 
 const CreatePage = () => {
     const [files, setFiles] = useState([]);
@@ -37,12 +38,33 @@ const CreatePage = () => {
     const dragCounter = useRef(0);
     const [editingIndex, setEditingIndex] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedGroups, setSelectedGroups] = useState([]);
 
     const toast = useToast()
 
     const {checkForDuplicates} = usePhotoStore()
 
     const { token } = useAuth();
+
+    const [myGroups, setMyGroups] = useState([]);
+
+    useEffect(() => {
+        if (!token) return;
+
+        fetch("/api/groups", {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+        })
+            .then(res => {
+                if (!res.ok) throw new Error(`Status ${res.status}`);
+                return res.json();
+            })
+            .then(payload => setMyGroups(payload.data))
+            .catch(err => console.error("Failed to fetch groups", err));
+    }, [token]);
 
     const verifyDuplicates = async () => {
         if (files.length === 0) return;
@@ -71,6 +93,9 @@ const CreatePage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const formData = new FormData();
+        formData.append('groups', JSON.stringify(selectedGroups));
+
         if (files.length === 0) {
             toast({
                 title: "Info",
@@ -92,7 +117,7 @@ const CreatePage = () => {
         }
 
         try {
-            const formData = new FormData();
+
 
             // Prześlij oryginalne nazwy plików jako dodatkowe pole
             const originalNames = files.map(file => file.name);
@@ -471,6 +496,17 @@ const CreatePage = () => {
                                     </Button>
                                 )}
                             </HStack>
+                            <FormControl>
+                                <FormLabel>Dodaj do grupy</FormLabel>
+                                <CheckboxGroup
+                                    value={selectedGroups}
+                                    onChange={setSelectedGroups}
+                                >
+                                    <Stack>
+                                        {myGroups.map(g=> <Checkbox key={g._id} value={g._id}>{g.name}</Checkbox>)}
+                                    </Stack>
+                                </CheckboxGroup>
+                            </FormControl>
                         </Stack>
                     </FormControl>
 

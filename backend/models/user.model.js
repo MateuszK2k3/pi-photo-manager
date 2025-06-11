@@ -18,12 +18,6 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'admin'],
         default: 'user',
     },
-    // groups: [
-    //     {
-    //         type: mongoose.Schema.Types.ObjectId,
-    //         ref: 'Group',
-    //     }
-    // ],
 }, {
     timestamps: true
 });

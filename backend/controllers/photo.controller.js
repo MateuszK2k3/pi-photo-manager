@@ -3,19 +3,35 @@ import mongoose from "mongoose";
 import {removeUploadedFile} from "../utils/fileStorage.js";
 import fs from "fs-extra";
 import path from "path";
+import Group from '../models/group.model.js';
 
 export const getPhotos = async (req, res) => {
     try {
-        const userId = req.user?.id;
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized" });
+        const userId = req.user.id;
+        const { group } = req.query;
+
+        // jeśli proszą o zdjęcia dla grupy:
+        if (group) {
+            const grp = await Group.findById(group);
+            if (!grp || !grp.members.includes(userId)) {
+                return res.status(403).json({ success: false, message: 'Brak dostępu do tej grupy' });
+            }
+
+            // **tu główna zmiana** – zamiast właścicieli, bierzemy zdjęcia współdzielone:
+            const photos = await Photo.find({
+                sharedWithGroups: group
+            }).populate('owner', 'login');
+
+            return res.json({ success: true, data: photos });
         }
 
+        // w pozostałych przypadkach – tylko własne zdjęcia
         const photos = await Photo.find({ owner: userId });
-        res.status(200).json({ success: true, data: photos });
+        res.json({ success: true, data: photos });
+
     } catch (err) {
-        console.error("Error on getting photos:", err.message);
-        res.status(500).json({ success: false, message: "Server error" });
+        console.error('Error on getting photos:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
@@ -37,13 +53,15 @@ export const createPhoto = async (req, res) => {
             });
         }
 
+        const selected = req.body.groups ? JSON.parse(req.body.groups) : [];
         const photos = await Promise.all(req.files.map(async file => {
             const relPath = `/photos/${req.user.login}`;
             const photoData = {
-                filename: file.originalname,
-                path:     relPath,
-                tags:     JSON.parse(req.body.tags || '[]'),
-                owner:    userId
+                filename:         file.originalname,
+                path:             relPath,
+                tags:             JSON.parse(req.body.tags || '[]'),
+                owner:            userId,
+                sharedWithGroups: Array.isArray(selected) ? selected : []
             };
 
             const newPhoto = new Photo(photoData);
@@ -90,8 +108,8 @@ export const updatePhoto = async (req, res) => {
 
         // Pobieramy rozszerzenie, np. ".png"
         const ext = path.extname(oldFilename);
-        const newFilename = `${newNameWithoutExt}${ext}`;   // "newName.png"
-        const newPath = path.join(uploadDir, photo.filename);
+        const newFilename = `${newNameWithoutExt}${ext}`;
+        const newPath = path.join(uploadDir, newFilename);
 
         // Jeśli nazwa pliku się zmieniła, przenosimy go (rename)
         if (newFilename !== oldFilename) {
