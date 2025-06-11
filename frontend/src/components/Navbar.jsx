@@ -66,14 +66,13 @@ const Navbar = () => {
                             <Button variant="outline" size="sm" onClick={handleLogout}>
                                 Logout
                             </Button>
+                            <RouterLink to="/create">
+                                <Button bg={useColorModeValue('white', 'whiteAlpha.200')}>
+                                    <PlusSquareIcon fontSize={20} />
+                                </Button>
+                            </RouterLink>
                         </>
                     )}
-
-                    <RouterLink to="/create">
-                        <Button bg={useColorModeValue('white', 'whiteAlpha.200')}>
-                            <PlusSquareIcon fontSize={20} />
-                        </Button>
-                    </RouterLink>
                     <Button
                         onClick={toggleColorMode}
                         bg={useColorModeValue('white', 'whiteAlpha.200')}

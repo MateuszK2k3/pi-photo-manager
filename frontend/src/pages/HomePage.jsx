@@ -55,6 +55,7 @@ const HomePage = () => {
 
     const bgPage  = useColorModeValue("white","gray.800");
     const panelBorder = useColorModeValue("gray.300","gray.600");
+    const descriptionColor = useColorModeValue("gray.600", "gray.400");
 
     const columns = useBreakpointValue({ base: 2, sm: 2, md: 3, lg: 5 });
 
@@ -378,7 +379,7 @@ const HomePage = () => {
                         {selectedGroup && (
                             <VStack align="start" spacing={1} mb={3}>
                                 <Heading size="md">{selectedGroup.name}</Heading>
-                                <Text color={useColorModeValue("gray.600","gray.400")}>
+                                <Text color={descriptionColor}>
                                     {selectedGroup.description || "Brak opisu"}
                                 </Text>
                             </VStack>
